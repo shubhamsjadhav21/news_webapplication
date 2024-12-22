@@ -1,0 +1,111 @@
+// Step 1: Create a basic Express server for the backend.
+const express = require('express');
+const cors = require('cors');
+const axios = require('axios');
+const mongoose = require('mongoose');
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+
+// Connect to MongoDB
+mongoose.connect('mongodb://localhost:27017/newsApp', {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+});
+
+const userSchema = new mongoose.Schema({
+    username: String,
+    interests: [String],
+});
+
+const User = mongoose.model('User', userSchema);
+
+// Route to fetch news from an external API
+app.get('/api/news', async (req, res) => {
+    const { category } = req.query;
+    const API_KEY = 'YOUR_NEWSAPI_KEY'; // Replace with your NewsAPI key
+    const url = `https://newsapi.org/v2/top-headlines?category=${category}&apiKey=${API_KEY}`;
+
+    try {
+        const response = await axios.get(url);
+        res.json(response.data);
+    } catch (error) {
+        res.status(500).json({ error: 'Error fetching news' });
+    }
+});
+
+// Route to handle user preferences
+app.post('/api/user/preferences', async (req, res) => {
+    const { username, interests } = req.body;
+
+    try {
+        const user = await User.findOneAndUpdate(
+            { username },
+            { interests },
+            { upsert: true, new: true }
+        );
+        res.json(user);
+    } catch (error) {
+        res.status(500).json({ error: 'Error saving preferences' });
+    }
+});
+
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
+
+// Step 2: Create a React front-end
+// Install dependencies: npm install react react-dom axios react-router-dom
+
+// src/App.js
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+
+const App = () => {
+    const [news, setNews] = useState([]);
+    const [category, setCategory] = useState('general');
+
+    useEffect(() => {
+        const fetchNews = async () => {
+            try {
+                const response = await axios.get(`http://localhost:5000/api/news?category=${category}`);
+                setNews(response.data.articles);
+            } catch (error) {
+                console.error('Error fetching news:', error);
+            }
+        };
+
+        fetchNews();
+    }, [category]);
+
+    return (
+        <div>
+            <h1>News Application</h1>
+            <select onChange={(e) => setCategory(e.target.value)}>
+                <option value="general">General</option>
+                <option value="business">Business</option>
+                <option value="technology">Technology</option>
+                <option value="sports">Sports</option>
+            </select>
+            <ul>
+                {news.map((article, index) => (
+                    <li key={index}>
+                        <a href={article.url} target="_blank" rel="noopener noreferrer">
+                            {article.title}
+                        </a>
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
+};
+
+export default App;
+
+// To run the application:
+// 1. Start the backend server: `node server.js`
+// 2. Start the React front-end: `npm start`
